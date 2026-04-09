@@ -1,14 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getQuestionsByLevel, checkAnswer, saveProgress } from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
 
 const TIMER_SECONDS = 30;
+const MAX_HINTS     = 2;
 
 export default function GamePage() {
-  const { levelId } = useParams();
-  const navigate    = useNavigate();
+  const { levelId }  = useParams();
+  const navigate     = useNavigate();
+  const location     = useLocation();
   const { t, toNepaliDigit } = useTranslation();
+
+  // ── Mode: 'practice' or 'test' (default: test) ──
+  const mode        = location.state?.mode ?? 'test';
+  const isPractice  = mode === 'practice';
 
   const [questions,            setQuestions]            = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -21,27 +27,28 @@ export default function GamePage() {
   const [wrongAnswers,         setWrongAnswers]         = useState([]);
   const [timeLeft,             setTimeLeft]             = useState(TIMER_SECONDS);
 
-  // Refs to avoid stale closures inside setInterval
+  // ── Hints ──
+  const [hintsLeft,      setHintsLeft]      = useState(MAX_HINTS);
+  const [eliminatedOpts, setEliminatedOpts] = useState([]);
+
+  // Refs to avoid stale closures
   const timerRef        = useRef(null);
   const isAnsweredRef   = useRef(false);
   const questionsRef    = useRef([]);
   const questionIdxRef  = useRef(0);
   const wrongAnswersRef = useRef([]);
 
-  // Keep refs in sync with state
   useEffect(() => { isAnsweredRef.current   = isAnswered;           }, [isAnswered]);
   useEffect(() => { questionsRef.current    = questions;            }, [questions]);
   useEffect(() => { questionIdxRef.current  = currentQuestionIndex; }, [currentQuestionIndex]);
   useEffect(() => { wrongAnswersRef.current = wrongAnswers;         }, [wrongAnswers]);
 
   const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
   const startTimer = useCallback(() => {
+    if (isPractice) return; // no timer in practice mode
     stopTimer();
     setTimeLeft(TIMER_SECONDS);
 
@@ -53,11 +60,9 @@ export default function GamePage() {
             const q = questionsRef.current[questionIdxRef.current];
             if (q) {
               const entry = {
-                question:      q.question,
-                options:       q.options,
-                yourAnswer:    'No answer (time up)',
-                correctAnswer: q.correctAnswer,
-                explanation:   q.explanation,
+                question: q.question, options: q.options,
+                yourAnswer: 'No answer (time up)',
+                correctAnswer: q.correctAnswer, explanation: q.explanation,
               };
               wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
               setWrongAnswers([...wrongAnswersRef.current]);
@@ -71,19 +76,17 @@ export default function GamePage() {
         return prev - 1;
       });
     }, 1000);
-  }, []);
+  }, [isPractice]);
 
-  // Cleanup on unmount
   useEffect(() => () => stopTimer(), []);
 
-  // Fetch questions then start timer
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         const res = await getQuestionsByLevel(levelId);
         setQuestions(res.data.data);
         questionsRef.current = res.data.data;
-        startTimer();
+        if (!isPractice) startTimer();
       } catch (err) {
         console.error('Error fetching questions:', err);
       } finally {
@@ -92,6 +95,16 @@ export default function GamePage() {
     };
     fetchQuestions();
   }, [levelId]);
+
+  // ── Hint handler ──
+  const handleHint = () => {
+    if (hintsLeft <= 0 || isAnswered || !isPractice) return;
+    const q       = questions[currentQuestionIndex];
+    const wrong   = q.options.filter(o => String(o) !== String(q.correctAnswer) && !eliminatedOpts.includes(o));
+    const toElim  = wrong.sort(() => Math.random() - 0.5).slice(0, 2);
+    setEliminatedOpts(prev => [...prev, ...toElim]);
+    setHintsLeft(prev => prev - 1);
+  };
 
   if (loading) {
     return (
@@ -105,9 +118,7 @@ export default function GamePage() {
     return (
       <div className="flex flex-col justify-center items-center h-screen gap-4">
         <p className="text-white text-2xl">No questions found for this level.</p>
-        <button onClick={() => navigate('/map')} className="btn-primary px-6 py-3">
-          ← Back to Map
-        </button>
+        <button onClick={() => navigate('/map')} className="btn-primary px-6 py-3">← Back to Map</button>
       </div>
     );
   }
@@ -120,7 +131,7 @@ export default function GamePage() {
   const timerTextColor  = timeLeft > 20 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400';
 
   const handleSelectAnswer = (option) => {
-    if (!isAnswered) setSelectedAnswer(option);
+    if (!isAnswered && !eliminatedOpts.includes(option)) setSelectedAnswer(option);
   };
 
   const handleSubmitAnswer = async () => {
@@ -137,17 +148,14 @@ export default function GamePage() {
         setCorrectCount(prev => prev + 1);
       } else {
         const entry = {
-          question:      currentQuestion.question,
-          options:       currentQuestion.options,
-          yourAnswer:    selectedAnswer,
-          correctAnswer: currentQuestion.correctAnswer,
-          explanation:   currentQuestion.explanation,
+          question: currentQuestion.question, options: currentQuestion.options,
+          yourAnswer: selectedAnswer,
+          correctAnswer: currentQuestion.correctAnswer, explanation: currentQuestion.explanation,
         };
         wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
         setWrongAnswers([...wrongAnswersRef.current]);
       }
     } catch (err) {
-      console.error('Error checking answer:', err);
       const correct = selectedAnswer === currentQuestion.correctAnswer;
       setIsCorrect(correct);
       setIsAnswered(true);
@@ -155,11 +163,9 @@ export default function GamePage() {
         setCorrectCount(prev => prev + 1);
       } else {
         const entry = {
-          question:      currentQuestion.question,
-          options:       currentQuestion.options,
-          yourAnswer:    selectedAnswer,
-          correctAnswer: currentQuestion.correctAnswer,
-          explanation:   currentQuestion.explanation,
+          question: currentQuestion.question, options: currentQuestion.options,
+          yourAnswer: selectedAnswer,
+          correctAnswer: currentQuestion.correctAnswer, explanation: currentQuestion.explanation,
         };
         wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
         setWrongAnswers([...wrongAnswersRef.current]);
@@ -172,26 +178,10 @@ export default function GamePage() {
   const handleFinishLevel = async () => {
     stopTimer();
     const score = Math.round((correctCount / totalQuestions) * 100);
-    const stars =
-      score === 100 ? 3 :
-      score >= 80   ? 2 :
-      score >= 60   ? 1 : 0;
-
-    try {
-      await saveProgress({ levelId, stars, score });
-    } catch (err) {
-      console.error('Failed to save progress:', err);
-    }
-
+    const stars = score === 100 ? 3 : score >= 80 ? 2 : score >= 60 ? 1 : 0;
+    try { await saveProgress({ levelId, stars, score }); } catch {}
     navigate('/result', {
-      state: {
-        levelId,
-        score,
-        stars,
-        correctCount,
-        totalQuestions,
-        wrongAnswers: wrongAnswersRef.current,
-      },
+      state: { levelId, score, stars, correctCount, totalQuestions, wrongAnswers: wrongAnswersRef.current, mode },
     });
   };
 
@@ -205,7 +195,8 @@ export default function GamePage() {
       setSelectedAnswer(null);
       setIsAnswered(false);
       setIsCorrect(false);
-      startTimer();
+      setEliminatedOpts([]);
+      if (!isPractice) startTimer();
     } else {
       handleFinishLevel();
     }
@@ -223,6 +214,16 @@ export default function GamePage() {
           >
             ← Map
           </button>
+
+          {/* Mode badge */}
+          <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+            isPractice
+              ? 'bg-green-500/30 text-green-300 border border-green-500/40'
+              : 'bg-red-500/30 text-red-300 border border-red-500/40'
+          }`}>
+            {isPractice ? '📖 Practice Mode' : '⏱ Test Mode'}
+          </span>
+
           <span className="text-game-yellow font-bold text-lg">
             {toNepaliDigit(correctCount)} / {toNepaliDigit(currentQuestionIndex + (isAnswered ? 1 : 0))} ✓
           </span>
@@ -240,19 +241,39 @@ export default function GamePage() {
         </p>
       </div>
 
-      {/* ── Timer ── */}
-      <div className="max-w-2xl mx-auto mb-4">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-white/60 text-sm">⏱ Time</span>
-          <span className={`font-bold text-lg ${timerTextColor}`}>{timeLeft}s</span>
+      {/* ── Timer (test mode only) ── */}
+      {!isPractice && (
+        <div className="max-w-2xl mx-auto mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-white/60 text-sm">⏱ Time</span>
+            <span className={`font-bold text-lg ${timerTextColor}`}>{timeLeft}s</span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div
+              className={`h-2 rounded-full transition-all duration-1000 ${timerColor}`}
+              style={{ width: `${timerPct}%` }}
+            />
+          </div>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-2">
-          <div
-            className={`h-2 rounded-full transition-all duration-1000 ${timerColor}`}
-            style={{ width: `${timerPct}%` }}
-          />
+      )}
+
+      {/* ── Hints bar (practice mode only) ── */}
+      {isPractice && !isAnswered && (
+        <div className="max-w-2xl mx-auto mb-4 flex items-center justify-between">
+          <span className="text-white/60 text-sm">💡 Hints remaining: <strong className="text-white">{hintsLeft}</strong></span>
+          <button
+            onClick={handleHint}
+            disabled={hintsLeft <= 0 || isAnswered}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
+              hintsLeft > 0
+                ? 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'
+                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            💡 50/50 Hint
+          </button>
         </div>
-      </div>
+      )}
 
       {/* ── Question card ── */}
       <div className="bg-white rounded-2xl shadow-2xl p-8 mb-6 max-w-2xl mx-auto">
@@ -260,11 +281,16 @@ export default function GamePage() {
           {currentQuestion.question}
         </h2>
 
+        {/* Options */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           {currentQuestion.options.map((option, idx) => {
+            const isEliminated = eliminatedOpts.includes(option);
             let cls = 'bg-gray-100 text-gray-800 hover:bg-gray-200';
-            if (isAnswered) {
-              if (option === currentQuestion.correctAnswer)
+
+            if (isEliminated) {
+              cls = 'bg-gray-100 text-gray-300 line-through cursor-not-allowed opacity-40';
+            } else if (isAnswered) {
+              if (String(option) === String(currentQuestion.correctAnswer))
                 cls = 'bg-green-500 text-white ring-2 ring-green-300';
               else if (option === selectedAnswer && !isCorrect)
                 cls = 'bg-red-400 text-white';
@@ -278,9 +304,9 @@ export default function GamePage() {
               <button
                 key={idx}
                 onClick={() => handleSelectAnswer(option)}
-                disabled={isAnswered}
+                disabled={isAnswered || isEliminated}
                 className={`p-5 text-xl font-bold rounded-xl transition-all duration-200 ${cls} ${
-                  isAnswered ? 'cursor-default' : 'cursor-pointer'
+                  isAnswered || isEliminated ? 'cursor-default' : 'cursor-pointer'
                 }`}
               >
                 {option}
@@ -289,6 +315,7 @@ export default function GamePage() {
           })}
         </div>
 
+        {/* Feedback */}
         {isAnswered && (
           <div className={`p-4 rounded-xl text-center mb-4 ${
             isCorrect ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'
@@ -301,12 +328,16 @@ export default function GamePage() {
                 {t('game.correctAnswer')} <strong>{currentQuestion.correctAnswer}</strong>
               </p>
             )}
-            {currentQuestion.explanation && (
-              <p className="text-gray-600 mt-1 text-sm italic">{currentQuestion.explanation}</p>
+            {/* Show explanation immediately in practice, at end in test */}
+            {isPractice && currentQuestion.explanation && (
+              <p className="text-gray-600 mt-2 text-sm italic bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                💡 {currentQuestion.explanation}
+              </p>
             )}
           </div>
         )}
 
+        {/* Action button */}
         <div className="text-center">
           {!isAnswered ? (
             <button
@@ -321,9 +352,7 @@ export default function GamePage() {
               onClick={handleNextQuestion}
               className="btn-success px-10 py-3 text-lg animate-pulse"
             >
-              {currentQuestionIndex < totalQuestions - 1
-                ? t('game.next')
-                : t('game.finish')}
+              {currentQuestionIndex < totalQuestions - 1 ? t('game.next') : t('game.finish')}
             </button>
           )}
         </div>

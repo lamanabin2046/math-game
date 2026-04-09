@@ -13,30 +13,84 @@ function Stars({ count }) {
   );
 }
 
-export default function MapPage() {
-  const navigate       = useNavigate();
-  const { isAdmin }    = useGame();           // ← admin flag from context
+// ── Mode Selection Modal ──
+function ModeModal({ level, onSelect, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+      <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl">
 
-  const [levels,   setLevels]   = useState([]);
-  const [progress, setProgress] = useState({});
-  const [loading,  setLoading]  = useState(true);
+        <div className="text-center mb-6">
+          <p className="text-gray-400 text-sm font-medium mb-1">Level {level.levelNumber}</p>
+          <h2 className="text-2xl font-black text-game-purple">{level.topic}</h2>
+          <p className="text-gray-400 text-sm mt-1">Grade {level.grade}</p>
+        </div>
+
+        <p className="text-center text-gray-600 font-medium mb-5">Choose your mode:</p>
+
+        <div className="flex flex-col gap-4">
+
+          {/* Practice Mode */}
+          <button
+            onClick={() => onSelect('practice')}
+            className="w-full rounded-2xl border-2 border-green-300 bg-green-50 hover:bg-green-100 p-5 text-left transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">📖</span>
+              <span className="text-xl font-black text-green-700">Practice Mode</span>
+            </div>
+            <ul className="text-sm text-green-700 space-y-1 ml-10">
+              <li>✅ No timer — take your time</li>
+              <li>✅ 2 hints available (50/50)</li>
+              <li>✅ See explanation after each answer</li>
+            </ul>
+          </button>
+
+          {/* Test Mode */}
+          <button
+            onClick={() => onSelect('test')}
+            className="w-full rounded-2xl border-2 border-red-300 bg-red-50 hover:bg-red-100 p-5 text-left transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">⏱</span>
+              <span className="text-xl font-black text-red-700">Test Mode</span>
+            </div>
+            <ul className="text-sm text-red-700 space-y-1 ml-10">
+              <li>⏱ 30 seconds per question</li>
+              <li>❌ No hints allowed</li>
+              <li>📋 Review wrong answers at end</li>
+            </ul>
+          </button>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2 text-gray-400 hover:text-gray-600 text-sm transition"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function MapPage() {
+  const navigate    = useNavigate();
+  const { isAdmin } = useGame();
+
+  const [levels,       setLevels]       = useState([]);
+  const [progress,     setProgress]     = useState({});
+  const [loading,      setLoading]      = useState(true);
+  const [selectedLevel, setSelectedLevel] = useState(null); // for modal
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [levelsRes, progressRes] = await Promise.all([
-          getAllLevels(),
-          getProgress(),
-        ]);
-
+        const [levelsRes, progressRes] = await Promise.all([getAllLevels(), getProgress()]);
         setLevels(levelsRes.data);
-
         const progressMap = {};
         (progressRes.data.data ?? []).forEach(p => {
           progressMap[p.level._id ?? p.level] = {
-            stars:     p.stars,
-            score:     p.score,
-            completed: p.completed,
+            stars: p.stars, score: p.score, completed: p.completed,
           };
         });
         setProgress(progressMap);
@@ -57,15 +111,27 @@ export default function MapPage() {
     );
   }
 
-  // ── Unlock logic ──────────────────────────────────────────────
-  // Admins: ALL levels unlocked.
-  // Students: level N unlocked only if level N-1 is completed.
   const isUnlocked = (index) => {
-    if (isAdmin) return true;                         // ← admin bypass
+    if (isAdmin) return true;
     if (index === 0) return true;
     const prevLevel    = levels[index - 1];
     const prevProgress = progress[prevLevel?._id];
     return prevProgress?.completed === true;
+  };
+
+  const handleLevelClick = (level, index) => {
+    if (!isUnlocked(index)) return;
+    if (isAdmin) {
+      // Admin skips mode selection — go straight to test mode
+      navigate(`/game/${level._id}`, { state: { mode: 'test' } });
+    } else {
+      setSelectedLevel(level);
+    }
+  };
+
+  const handleModeSelect = (mode) => {
+    navigate(`/game/${selectedLevel._id}`, { state: { mode } });
+    setSelectedLevel(null);
   };
 
   const totalStars     = Object.values(progress).reduce((s, p) => s + (p.stars ?? 0), 0);
@@ -74,12 +140,20 @@ export default function MapPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-300 via-green-200 to-yellow-200 p-6">
 
-      {/* ── Header ── */}
+      {/* Mode modal */}
+      {selectedLevel && (
+        <ModeModal
+          level={selectedLevel}
+          onSelect={handleModeSelect}
+          onClose={() => setSelectedLevel(null)}
+        />
+      )}
+
+      {/* Header */}
       <div className="text-center mb-6">
         <h1 className="text-5xl font-bold text-green-700 drop-shadow-lg">🏔️ Math Mountain</h1>
         <p className="text-gray-700 text-lg mt-1">Climb by completing levels!</p>
 
-        {/* Admin banner */}
         {isAdmin && (
           <div className="inline-flex items-center gap-2 mt-3 px-5 py-2 rounded-full
             bg-purple-600 text-white font-bold text-sm shadow-lg shadow-purple-500/30">
@@ -87,7 +161,6 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* Stats */}
         {!isAdmin && (
           <div className="flex justify-center gap-6 mt-3">
             <span className="bg-white/70 rounded-full px-4 py-1 font-bold text-gray-700 text-sm">
@@ -100,13 +173,11 @@ export default function MapPage() {
         )}
       </div>
 
-      {/* ── Map ── */}
+      {/* Map */}
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-6">
           <div className="text-7xl animate-bounce">{isAdmin ? '🛡️' : '🐢'}</div>
-          <p className="text-gray-800 font-bold mt-1">
-            {isAdmin ? 'Playing as Admin' : "Let's Climb!"}
-          </p>
+          <p className="text-gray-800 font-bold mt-1">{isAdmin ? 'Playing as Admin' : "Let's Climb!"}</p>
         </div>
 
         <div className="space-y-6">
@@ -125,7 +196,7 @@ export default function MapPage() {
               >
                 <div className="flex items-end gap-4">
                   <button
-                    onClick={() => navigate(`/game/${level._id}`)}
+                    onClick={() => handleLevelClick(level, index)}
                     disabled={!unlocked}
                     className={`
                       flex-1 h-24 rounded-2xl shadow-xl border-4 font-bold
@@ -141,11 +212,9 @@ export default function MapPage() {
                       }
                     `}
                   >
-                    {/* Shine */}
                     {(completed || isAdmin) && (
                       <div className="absolute top-0 left-2 w-6 h-full bg-white/20 skew-x-12 pointer-events-none" />
                     )}
-
                     <span className="text-white text-lg font-black drop-shadow">
                       Level {level.levelNumber ?? index + 1}
                     </span>
@@ -157,7 +226,6 @@ export default function MapPage() {
                     )}
                   </button>
 
-                  {/* Stars or lock */}
                   <div className="flex flex-col items-center gap-1 min-w-[48px]">
                     {!unlocked && !isAdmin
                       ? <span className="text-3xl">🔒</span>
@@ -184,14 +252,25 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div className="text-center mt-8">
+      <div className="text-center mt-8 flex justify-center gap-4">
+        <button
+          onClick={() => navigate('/profile')}
+          className="bg-white/80 hover:bg-white text-gray-700 px-6 py-3 rounded-full font-bold shadow transition"
+        >
+          👤 Profile
+        </button>
+        <button
+          onClick={() => navigate('/leaderboard')}
+          className="bg-white/80 hover:bg-white text-gray-700 px-6 py-3 rounded-full font-bold shadow transition"
+        >
+          🏆 Leaderboard
+        </button>
         <button
           onClick={() => navigate('/')}
           className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600
-            text-white px-8 py-3 rounded-full font-bold text-lg shadow-lg
-            transform hover:scale-105 transition-transform"
+            text-white px-6 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition"
         >
-          ← Back to Home
+          ← Home
         </button>
       </div>
     </div>
