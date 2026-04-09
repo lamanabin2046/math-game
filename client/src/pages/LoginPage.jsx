@@ -30,9 +30,19 @@ export default function LoginPage() {
         res = await registerStudent({ name: formData.name, username: formData.username, password: formData.password });
       }
 
-      localStorage.setItem('token', res.data.token);
+      // Save token, role and studentId to localStorage
+      localStorage.setItem('token',     res.data.token);
+      localStorage.setItem('role',      res.data.role);
+      localStorage.setItem('studentId', res.data._id);
+
       setStudent(res.data);
-      navigate('/map');
+
+      // Redirect admin to admin panel, students to map
+      if (res.data.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/map');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong.');
     } finally {
@@ -55,7 +65,6 @@ export default function LoginPage() {
 
       <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl">
 
-        {/* Logo / title */}
         <div className="text-center mb-6">
           <div className="text-5xl mb-2">🏔️</div>
           <h1 className="text-3xl font-bold text-game-purple">{t('app.title')}</h1>
@@ -64,7 +73,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="bg-red-100 border border-red-300 text-red-700 p-3 rounded-lg mb-4 text-sm">
             {error}
@@ -73,7 +81,6 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* Name — only on register */}
           {!isLogin && (
             <div>
               <label className="block text-gray-600 font-semibold text-sm mb-1">
@@ -91,7 +98,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Username */}
           <div>
             <label className="block text-gray-600 font-semibold text-sm mb-1">
               {t('login.usernameLabel')}
@@ -107,7 +113,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Password */}
           <div>
             <label className="block text-gray-600 font-semibold text-sm mb-1">
               {t('login.passwordLabel')}
@@ -137,7 +142,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Toggle login/register */}
         <p className="text-center text-gray-500 text-sm mt-5">
           {isLogin ? t('login.noAccount') : t('login.hasAccount')}{' '}
           <button
