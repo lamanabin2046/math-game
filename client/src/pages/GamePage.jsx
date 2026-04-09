@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getQuestionsByLevel, checkAnswer, saveProgress } from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
+
+const TIMER_SECONDS = 30;
 
 export default function GamePage() {
   const { levelId } = useParams();
@@ -16,12 +18,20 @@ export default function GamePage() {
   const [correctCount,         setCorrectCount]         = useState(0);
   const [loading,              setLoading]              = useState(true);
   const [submitting,           setSubmitting]           = useState(false);
+  const [wrongAnswers,         setWrongAnswers]         = useState([]);
 
+  // ── Timer state ──
+  const [timeLeft,   setTimeLeft]   = useState(TIMER_SECONDS);
+  const [timerActive, setTimerActive] = useState(false);
+  const timerRef = useRef(null);
+
+  // ── Fetch questions ──
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         const res = await getQuestionsByLevel(levelId);
         setQuestions(res.data.data);
+        setTimerActive(true);
       } catch (err) {
         console.error('Error fetching questions:', err);
       } finally {
@@ -30,6 +40,48 @@ export default function GamePage() {
     };
     fetchQuestions();
   }, [levelId]);
+
+  // ── Countdown timer ──
+  useEffect(() => {
+    if (!timerActive || isAnswered) return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          handleTimeUp();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [timerActive, isAnswered, currentQuestionIndex]);
+
+  // ── Reset timer on new question ──
+  useEffect(() => {
+    setTimeLeft(TIMER_SECONDS);
+    setTimerActive(true);
+  }, [currentQuestionIndex]);
+
+  const handleTimeUp = () => {
+    if (isAnswered) return;
+    clearInterval(timerRef.current);
+    setIsAnswered(true);
+    setIsCorrect(false);
+    // Record as wrong answer (no selection)
+    const q = questions[currentQuestionIndex];
+    if (q) {
+      setWrongAnswers(prev => [...prev, {
+        question:      q.question,
+        options:       q.options,
+        yourAnswer:    'No answer (time up)',
+        correctAnswer: q.correctAnswer,
+        explanation:   q.explanation,
+      }]);
+    }
+  };
 
   if (loading) {
     return (
@@ -43,10 +95,7 @@ export default function GamePage() {
     return (
       <div className="flex flex-col justify-center items-center h-screen gap-4">
         <p className="text-white text-2xl">No questions found for this level.</p>
-        <button
-          onClick={() => navigate('/map')}
-          className="btn-primary px-6 py-3"
-        >
+        <button onClick={() => navigate('/map')} className="btn-primary px-6 py-3">
           ← Back to Map
         </button>
       </div>
@@ -56,6 +105,9 @@ export default function GamePage() {
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions  = questions.length;
   const progressPct     = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+  const timerPct        = (timeLeft / TIMER_SECONDS) * 100;
+  const timerColor      = timeLeft > 20 ? 'bg-green-400' : timeLeft > 10 ? 'bg-yellow-400' : 'bg-red-500';
+  const timerTextColor  = timeLeft > 20 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400';
 
   const handleSelectAnswer = (option) => {
     if (!isAnswered) setSelectedAnswer(option);
@@ -63,6 +115,8 @@ export default function GamePage() {
 
   const handleSubmitAnswer = async () => {
     if (selectedAnswer === null || isAnswered || submitting) return;
+    clearInterval(timerRef.current);
+    setTimerActive(false);
     setSubmitting(true);
 
     try {
@@ -70,13 +124,33 @@ export default function GamePage() {
       const correct = res.data.isCorrect;
       setIsCorrect(correct);
       setIsAnswered(true);
-      if (correct) setCorrectCount(prev => prev + 1);
+      if (correct) {
+        setCorrectCount(prev => prev + 1);
+      } else {
+        setWrongAnswers(prev => [...prev, {
+          question:      currentQuestion.question,
+          options:       currentQuestion.options,
+          yourAnswer:    selectedAnswer,
+          correctAnswer: currentQuestion.correctAnswer,
+          explanation:   currentQuestion.explanation,
+        }]);
+      }
     } catch (err) {
       console.error('Error checking answer:', err);
       const correct = selectedAnswer === currentQuestion.correctAnswer;
       setIsCorrect(correct);
       setIsAnswered(true);
-      if (correct) setCorrectCount(prev => prev + 1);
+      if (correct) {
+        setCorrectCount(prev => prev + 1);
+      } else {
+        setWrongAnswers(prev => [...prev, {
+          question:      currentQuestion.question,
+          options:       currentQuestion.options,
+          yourAnswer:    selectedAnswer,
+          correctAnswer: currentQuestion.correctAnswer,
+          explanation:   currentQuestion.explanation,
+        }]);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -96,17 +170,12 @@ export default function GamePage() {
     }
 
     navigate('/result', {
-      state: {
-        levelId,
-        score,
-        stars,
-        correctCount,
-        totalQuestions,
-      },
+      state: { levelId, score, stars, correctCount, totalQuestions, wrongAnswers },
     });
   };
 
   const handleNextQuestion = () => {
+    clearInterval(timerRef.current);
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex(i => i + 1);
       setSelectedAnswer(null);
@@ -121,7 +190,7 @@ export default function GamePage() {
     <div className="min-h-screen bg-gradient-to-b from-game-purple to-game-dark p-6">
 
       {/* ── Top bar ── */}
-      <div className="max-w-2xl mx-auto mb-6">
+      <div className="max-w-2xl mx-auto mb-4">
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={() => navigate('/map')}
@@ -129,25 +198,37 @@ export default function GamePage() {
           >
             ← Map
           </button>
-
-          {/* Score counter — uses Devanagari in Nepali mode */}
           <span className="text-game-yellow font-bold text-lg">
             {toNepaliDigit(correctCount)} / {toNepaliDigit(currentQuestionIndex + (isAnswered ? 1 : 0))} ✓
           </span>
         </div>
 
-        {/* Progress bar */}
-        <div className="w-full bg-gray-700 rounded-full h-3">
+        {/* Question progress bar */}
+        <div className="w-full bg-gray-700 rounded-full h-3 mb-3">
           <div
             className="bg-game-green h-3 rounded-full transition-all duration-500"
             style={{ width: `${progressPct}%` }}
           />
         </div>
-
-        {/* Question counter — uses Devanagari in Nepali mode */}
-        <p className="text-white/60 text-sm mt-1 text-right">
+        <p className="text-white/60 text-sm text-right">
           {t('game.question')} {toNepaliDigit(currentQuestionIndex + 1)} {t('game.of')} {toNepaliDigit(totalQuestions)}
         </p>
+      </div>
+
+      {/* ── Timer ── */}
+      <div className="max-w-2xl mx-auto mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-white/60 text-sm">⏱ Time</span>
+          <span className={`font-bold text-lg ${timerTextColor}`}>
+            {timeLeft}s
+          </span>
+        </div>
+        <div className="w-full bg-gray-700 rounded-full h-2">
+          <div
+            className={`h-2 rounded-full transition-all duration-1000 ${timerColor}`}
+            style={{ width: `${timerPct}%` }}
+          />
+        </div>
       </div>
 
       {/* ── Question card ── */}
@@ -200,7 +281,7 @@ export default function GamePage() {
               </p>
             )}
             {currentQuestion.explanation && (
-              <p className="text-gray-600 mt-1 text-sm">{currentQuestion.explanation}</p>
+              <p className="text-gray-600 mt-1 text-sm italic">{currentQuestion.explanation}</p>
             )}
           </div>
         )}

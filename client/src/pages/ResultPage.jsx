@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getAllLevels } from '../services/api';
 
-// ── Stars helper ──────────────────────────────────────────────
 function StarDisplay({ stars }) {
   return (
     <div className="flex justify-center gap-3 my-4">
@@ -10,10 +9,10 @@ function StarDisplay({ stars }) {
         <span
           key={i}
           className={`text-6xl transition-all duration-500 ${
-            i <= stars ? 'opacity-100 drop-shadow-lg' : 'opacity-20 grayscale'
+            i <= stars ? 'opacity-100' : 'opacity-20 grayscale'
           }`}
           style={{
-            filter: i <= stars ? 'drop-shadow(0 0 8px #FFD700)' : undefined,
+            filter:    i <= stars ? 'drop-shadow(0 0 8px #FFD700)' : undefined,
             transform: i <= stars ? 'scale(1.1)' : 'scale(0.9)',
           }}
         >
@@ -24,7 +23,6 @@ function StarDisplay({ stars }) {
   );
 }
 
-// ── Message based on score ────────────────────────────────────
 function getMessage(stars) {
   if (stars === 3) return { emoji: '🏆', text: 'PERFECT! You are a Math Master!' };
   if (stars === 2) return { emoji: '🎉', text: 'Great job! Almost perfect!' };
@@ -33,24 +31,24 @@ function getMessage(stars) {
 }
 
 export default function ResultPage() {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const state     = location.state;
+  const navigate = useNavigate();
+  const location = useLocation();
+  const state    = location.state;
 
-  const [nextLevelId, setNextLevelId] = useState(null);
-  const [loadingNext, setLoadingNext] = useState(true);
+  const [nextLevelId,   setNextLevelId]   = useState(null);
+  const [loadingNext,   setLoadingNext]   = useState(true);
+  const [showReview,    setShowReview]    = useState(false);
 
-  // Data passed from GamePage
-  const levelId       = state?.levelId       ?? null;
-  const score         = state?.score         ?? 0;
-  const stars         = state?.stars         ?? 0;
-  const correctCount  = state?.correctCount  ?? 0;
-  const totalQuestions= state?.totalQuestions?? 0;
-  const passed        = stars >= 1;
+  const levelId        = state?.levelId        ?? null;
+  const score          = state?.score          ?? 0;
+  const stars          = state?.stars          ?? 0;
+  const correctCount   = state?.correctCount   ?? 0;
+  const totalQuestions = state?.totalQuestions ?? 0;
+  const wrongAnswers   = state?.wrongAnswers   ?? [];
+  const passed         = stars >= 1;
 
   const { emoji, text } = getMessage(stars);
 
-  // ── Find the next level ───────────────────────────────────
   useEffect(() => {
     const findNext = async () => {
       if (!levelId) { setLoadingNext(false); return; }
@@ -70,7 +68,6 @@ export default function ResultPage() {
     findNext();
   }, [levelId]);
 
-  // If someone lands here directly with no state, send to map
   if (!state) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
@@ -87,35 +84,26 @@ export default function ResultPage() {
 
       {/* ── Emoji + Title ── */}
       <div className="text-8xl mb-2 animate-bounce">{emoji}</div>
-      <h1 className="text-4xl font-bold text-game-yellow text-center mb-1">
-        Level Complete!
-      </h1>
+      <h1 className="text-4xl font-bold text-game-yellow text-center mb-1">Level Complete!</h1>
       <p className="text-white/70 text-lg text-center mb-4">{text}</p>
 
       {/* ── Stars ── */}
       <StarDisplay stars={stars} />
 
       {/* ── Score card ── */}
-      <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6 w-full max-w-sm mb-6 text-center">
-        <div className="text-6xl font-black text-game-yellow mb-1">
-          {score}%
-        </div>
-        <p className="text-white/60 text-sm mb-4">
-          {correctCount} out of {totalQuestions} correct
-        </p>
+      <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6 w-full max-w-sm mb-4 text-center">
+        <div className="text-6xl font-black text-game-yellow mb-1">{score}%</div>
+        <p className="text-white/60 text-sm mb-4">{correctCount} out of {totalQuestions} correct</p>
 
-        {/* Score bar */}
         <div className="w-full bg-white/20 rounded-full h-3 mb-3">
           <div
             className={`h-3 rounded-full transition-all duration-700 ${
-              score >= 80 ? 'bg-green-400' :
-              score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+              score >= 80 ? 'bg-green-400' : score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
             }`}
             style={{ width: `${score}%` }}
           />
         </div>
 
-        {/* Pass / Fail label */}
         <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
           passed
             ? 'bg-green-500/30 text-green-300 border border-green-500/50'
@@ -125,10 +113,56 @@ export default function ResultPage() {
         </span>
       </div>
 
+      {/* ── Wrong Answer Review ── */}
+      {wrongAnswers.length > 0 && (
+        <div className="w-full max-w-sm mb-4">
+          <button
+            onClick={() => setShowReview(v => !v)}
+            className="w-full py-3 rounded-2xl font-bold text-white bg-orange-500/30 hover:bg-orange-500/50 border border-orange-400/40 transition text-center"
+          >
+            {showReview ? '▲ Hide' : '▼ Review'} {wrongAnswers.length} Wrong Answer{wrongAnswers.length > 1 ? 's' : ''}
+          </button>
+
+          {showReview && (
+            <div className="mt-3 flex flex-col gap-3">
+              {wrongAnswers.map((item, idx) => (
+                <div key={idx} className="bg-white rounded-2xl p-4 text-left shadow-lg">
+                  <p className="font-bold text-gray-800 mb-2 text-sm">
+                    Q{idx + 1}: {item.question}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {item.options.map((opt, i) => {
+                      const isCorrect = opt === item.correctAnswer;
+                      const isYours   = opt === item.yourAnswer && opt !== item.correctAnswer;
+                      return (
+                        <div
+                          key={i}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                            isCorrect ? 'bg-green-100 text-green-800 border border-green-300' :
+                            isYours   ? 'bg-red-100 text-red-700 border border-red-300' :
+                                        'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {isCorrect ? '✅ ' : isYours ? '❌ ' : ''}{opt}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-xs text-gray-500 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                    <strong>Your answer:</strong> {item.yourAnswer}<br />
+                    {item.explanation && <span><strong>Explanation:</strong> {item.explanation}</span>}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Action buttons ── */}
       <div className="flex flex-col gap-3 w-full max-w-sm">
-
-        {/* Next Level — only shown if passed and next level exists */}
         {passed && !loadingNext && nextLevelId && (
           <button
             onClick={() => navigate(`/game/${nextLevelId}`)}
@@ -141,7 +175,6 @@ export default function ResultPage() {
           </button>
         )}
 
-        {/* Try again */}
         {levelId && (
           <button
             onClick={() => navigate(`/game/${levelId}`)}
@@ -152,13 +185,18 @@ export default function ResultPage() {
           </button>
         )}
 
-        {/* Back to map */}
         <button
           onClick={() => navigate('/map')}
-          className="w-full py-3 rounded-2xl font-bold text-lg text-white/70
-            hover:text-white transition text-center"
+          className="w-full py-3 rounded-2xl font-bold text-lg text-white/70 hover:text-white transition text-center"
         >
           🗺️ Back to Map
+        </button>
+
+        <button
+          onClick={() => navigate('/leaderboard')}
+          className="w-full py-3 rounded-2xl font-bold text-lg text-white/70 hover:text-white transition text-center"
+        >
+          🏆 Leaderboard
         </button>
       </div>
     </div>
