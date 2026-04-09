@@ -179,9 +179,13 @@ export default function GamePage() {
     stopTimer();
     const score = Math.round((correctCount / totalQuestions) * 100);
     const stars = score === 100 ? 3 : score >= 80 ? 2 : score >= 60 ? 1 : 0;
-    try { await saveProgress({ levelId, stars, score }); } catch {}
+    let newBadges = [];
+    try {
+      const res = await saveProgress({ levelId, stars, score, timeLeft, mode });
+      newBadges = res.data.newBadges ?? [];
+    } catch {}
     navigate('/result', {
-      state: { levelId, score, stars, correctCount, totalQuestions, wrongAnswers: wrongAnswersRef.current, mode },
+      state: { levelId, score, stars, correctCount, totalQuestions, wrongAnswers: wrongAnswersRef.current, mode, newBadges },
     });
   };
 

@@ -77,7 +77,32 @@ export default function ProfilePage() {
               <StatCard icon="✅" label="Levels Completed"  value={profile.levelsCompleted} />
               <StatCard icon="🌟" label="Total Stars"       value={profile.totalStars} />
               <StatCard icon="📊" label="Average Score"     value={`${profile.avgScore}%`} />
+              <StatCard icon="🔥" label="Current Streak"    value={`${profile.currentStreak} days`} />
+              <StatCard icon="💎" label="Longest Streak"    value={`${profile.longestStreak} days`} />
             </div>
+
+            {/* Badges */}
+            {profile.badges && profile.badges.length > 0 && (
+              <div className="bg-white/10 border border-white/20 rounded-2xl p-5 mb-6">
+                <h3 className="text-white font-bold mb-3">🏅 My Badges ({profile.badges.length})</h3>
+                <div className="flex flex-wrap gap-3">
+                  {profile.badges.map((b, i) => (
+                    <div key={i} className="bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-center min-w-[80px]">
+                      <p className="text-3xl">{b.emoji}</p>
+                      <p className="text-white text-xs font-bold mt-1">{b.name}</p>
+                      <p className="text-white/40 text-xs mt-0.5">{b.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {profile.badges && profile.badges.length === 0 && (
+              <div className="bg-white/10 border border-white/20 rounded-2xl p-5 mb-6 text-center">
+                <p className="text-4xl mb-2">🏅</p>
+                <p className="text-white/50 text-sm">No badges yet — complete levels to earn them!</p>
+              </div>
+            )}
 
             {/* Grade breakdown */}
             {profile.gradeBreakdown && profile.gradeBreakdown.length > 0 && (

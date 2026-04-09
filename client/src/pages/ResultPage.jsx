@@ -45,6 +45,7 @@ export default function ResultPage() {
   const correctCount   = state?.correctCount   ?? 0;
   const totalQuestions = state?.totalQuestions ?? 0;
   const wrongAnswers   = state?.wrongAnswers   ?? [];
+  const newBadges      = state?.newBadges      ?? [];
   const passed         = stars >= 1;
 
   const { emoji, text } = getMessage(stars);
@@ -89,6 +90,21 @@ export default function ResultPage() {
 
       {/* ── Stars ── */}
       <StarDisplay stars={stars} />
+
+      {/* ── New Badges Earned ── */}
+      {newBadges.length > 0 && (
+        <div className="w-full max-w-sm mb-4 bg-yellow-400/20 border border-yellow-400/40 rounded-2xl p-4 text-center">
+          <p className="text-yellow-300 font-bold mb-3">🎉 New Badge{newBadges.length > 1 ? 's' : ''} Earned!</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {newBadges.map((b, i) => (
+              <div key={i} className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                <p className="text-2xl">{b.emoji}</p>
+                <p className="text-white text-xs font-bold mt-1">{b.name}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Score card ── */}
       <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6 w-full max-w-sm mb-4 text-center">

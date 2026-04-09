@@ -77,10 +77,16 @@ export default function MapPage() {
   const navigate    = useNavigate();
   const { isAdmin } = useGame();
 
-  const [levels,       setLevels]       = useState([]);
-  const [progress,     setProgress]     = useState({});
-  const [loading,      setLoading]      = useState(true);
-  const [selectedLevel, setSelectedLevel] = useState(null); // for modal
+  const [levels,        setLevels]        = useState([]);
+  const [progress,      setProgress]      = useState({});
+  const [loading,       setLoading]       = useState(true);
+  const [selectedLevel, setSelectedLevel] = useState(null);
+  const [streak,        setStreak]        = useState(0);
+
+  useEffect(() => {
+    const s = localStorage.getItem('currentStreak');
+    if (s) setStreak(Number(s));
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -162,15 +168,43 @@ export default function MapPage() {
         )}
 
         {!isAdmin && (
-          <div className="flex justify-center gap-6 mt-3">
+          <div className="flex justify-center gap-4 mt-3 flex-wrap">
             <span className="bg-white/70 rounded-full px-4 py-1 font-bold text-gray-700 text-sm">
               ⭐ {totalStars} stars
             </span>
             <span className="bg-white/70 rounded-full px-4 py-1 font-bold text-gray-700 text-sm">
               ✅ {completedCount} / {levels.length} done
             </span>
+            {streak > 0 && (
+              <span className="bg-orange-400/80 rounded-full px-4 py-1 font-bold text-white text-sm">
+                🔥 {streak} day streak
+              </span>
+            )}
           </div>
         )}
+
+        {/* ── Nav buttons ── */}
+        <div className="flex justify-center gap-3 mt-4">
+          <button
+            onClick={() => navigate('/profile')}
+            className="bg-white/80 hover:bg-white text-gray-700 px-5 py-2 rounded-full font-bold shadow text-sm transition"
+          >
+            👤 Profile
+          </button>
+          <button
+            onClick={() => navigate('/leaderboard')}
+            className="bg-white/80 hover:bg-white text-gray-700 px-5 py-2 rounded-full font-bold shadow text-sm transition"
+          >
+            🏆 Leaderboard
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600
+              text-white px-5 py-2 rounded-full font-bold shadow text-sm transition"
+          >
+            ← Home
+          </button>
+        </div>
       </div>
 
       {/* Map */}
@@ -252,27 +286,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div className="text-center mt-8 flex justify-center gap-4">
-        <button
-          onClick={() => navigate('/profile')}
-          className="bg-white/80 hover:bg-white text-gray-700 px-6 py-3 rounded-full font-bold shadow transition"
-        >
-          👤 Profile
-        </button>
-        <button
-          onClick={() => navigate('/leaderboard')}
-          className="bg-white/80 hover:bg-white text-gray-700 px-6 py-3 rounded-full font-bold shadow transition"
-        >
-          🏆 Leaderboard
-        </button>
-        <button
-          onClick={() => navigate('/')}
-          className="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600
-            text-white px-6 py-3 rounded-full font-bold shadow-lg transform hover:scale-105 transition"
-        >
-          ← Home
-        </button>
-      </div>
+
     </div>
   );
 }

@@ -30,10 +30,11 @@ export default function LoginPage() {
         res = await registerStudent({ name: formData.name, username: formData.username, password: formData.password });
       }
 
-      // Save token, role and studentId to localStorage
-      localStorage.setItem('token',     res.data.token);
-      localStorage.setItem('role',      res.data.role);
-      localStorage.setItem('studentId', res.data._id);
+      // Save token, role, studentId and streak to localStorage
+      localStorage.setItem('token',         res.data.token);
+      localStorage.setItem('role',          res.data.role);
+      localStorage.setItem('studentId',     res.data._id);
+      localStorage.setItem('currentStreak', res.data.currentStreak ?? 0);
 
       setStudent(res.data);
 
