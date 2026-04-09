@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getQuestionsByLevel, checkAnswer, saveProgress } from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
@@ -19,19 +19,71 @@ export default function GamePage() {
   const [loading,              setLoading]              = useState(true);
   const [submitting,           setSubmitting]           = useState(false);
   const [wrongAnswers,         setWrongAnswers]         = useState([]);
+  const [timeLeft,             setTimeLeft]             = useState(TIMER_SECONDS);
 
-  // ── Timer state ──
-  const [timeLeft,   setTimeLeft]   = useState(TIMER_SECONDS);
-  const [timerActive, setTimerActive] = useState(false);
-  const timerRef = useRef(null);
+  // Refs to avoid stale closures inside setInterval
+  const timerRef        = useRef(null);
+  const isAnsweredRef   = useRef(false);
+  const questionsRef    = useRef([]);
+  const questionIdxRef  = useRef(0);
+  const wrongAnswersRef = useRef([]);
 
-  // ── Fetch questions ──
+  // Keep refs in sync with state
+  useEffect(() => { isAnsweredRef.current   = isAnswered;           }, [isAnswered]);
+  useEffect(() => { questionsRef.current    = questions;            }, [questions]);
+  useEffect(() => { questionIdxRef.current  = currentQuestionIndex; }, [currentQuestionIndex]);
+  useEffect(() => { wrongAnswersRef.current = wrongAnswers;         }, [wrongAnswers]);
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const startTimer = useCallback(() => {
+    stopTimer();
+    setTimeLeft(TIMER_SECONDS);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          stopTimer();
+          if (!isAnsweredRef.current) {
+            const q = questionsRef.current[questionIdxRef.current];
+            if (q) {
+              const entry = {
+                question:      q.question,
+                options:       q.options,
+                yourAnswer:    'No answer (time up)',
+                correctAnswer: q.correctAnswer,
+                explanation:   q.explanation,
+              };
+              wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
+              setWrongAnswers([...wrongAnswersRef.current]);
+            }
+            isAnsweredRef.current = true;
+            setIsAnswered(true);
+            setIsCorrect(false);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => () => stopTimer(), []);
+
+  // Fetch questions then start timer
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         const res = await getQuestionsByLevel(levelId);
         setQuestions(res.data.data);
-        setTimerActive(true);
+        questionsRef.current = res.data.data;
+        startTimer();
       } catch (err) {
         console.error('Error fetching questions:', err);
       } finally {
@@ -40,48 +92,6 @@ export default function GamePage() {
     };
     fetchQuestions();
   }, [levelId]);
-
-  // ── Countdown timer ──
-  useEffect(() => {
-    if (!timerActive || isAnswered) return;
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          handleTimeUp();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timerRef.current);
-  }, [timerActive, isAnswered, currentQuestionIndex]);
-
-  // ── Reset timer on new question ──
-  useEffect(() => {
-    setTimeLeft(TIMER_SECONDS);
-    setTimerActive(true);
-  }, [currentQuestionIndex]);
-
-  const handleTimeUp = () => {
-    if (isAnswered) return;
-    clearInterval(timerRef.current);
-    setIsAnswered(true);
-    setIsCorrect(false);
-    // Record as wrong answer (no selection)
-    const q = questions[currentQuestionIndex];
-    if (q) {
-      setWrongAnswers(prev => [...prev, {
-        question:      q.question,
-        options:       q.options,
-        yourAnswer:    'No answer (time up)',
-        correctAnswer: q.correctAnswer,
-        explanation:   q.explanation,
-      }]);
-    }
-  };
 
   if (loading) {
     return (
@@ -115,8 +125,7 @@ export default function GamePage() {
 
   const handleSubmitAnswer = async () => {
     if (selectedAnswer === null || isAnswered || submitting) return;
-    clearInterval(timerRef.current);
-    setTimerActive(false);
+    stopTimer();
     setSubmitting(true);
 
     try {
@@ -127,13 +136,15 @@ export default function GamePage() {
       if (correct) {
         setCorrectCount(prev => prev + 1);
       } else {
-        setWrongAnswers(prev => [...prev, {
+        const entry = {
           question:      currentQuestion.question,
           options:       currentQuestion.options,
           yourAnswer:    selectedAnswer,
           correctAnswer: currentQuestion.correctAnswer,
           explanation:   currentQuestion.explanation,
-        }]);
+        };
+        wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
+        setWrongAnswers([...wrongAnswersRef.current]);
       }
     } catch (err) {
       console.error('Error checking answer:', err);
@@ -143,13 +154,15 @@ export default function GamePage() {
       if (correct) {
         setCorrectCount(prev => prev + 1);
       } else {
-        setWrongAnswers(prev => [...prev, {
+        const entry = {
           question:      currentQuestion.question,
           options:       currentQuestion.options,
           yourAnswer:    selectedAnswer,
           correctAnswer: currentQuestion.correctAnswer,
           explanation:   currentQuestion.explanation,
-        }]);
+        };
+        wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
+        setWrongAnswers([...wrongAnswersRef.current]);
       }
     } finally {
       setSubmitting(false);
@@ -157,6 +170,7 @@ export default function GamePage() {
   };
 
   const handleFinishLevel = async () => {
+    stopTimer();
     const score = Math.round((correctCount / totalQuestions) * 100);
     const stars =
       score === 100 ? 3 :
@@ -170,17 +184,28 @@ export default function GamePage() {
     }
 
     navigate('/result', {
-      state: { levelId, score, stars, correctCount, totalQuestions, wrongAnswers },
+      state: {
+        levelId,
+        score,
+        stars,
+        correctCount,
+        totalQuestions,
+        wrongAnswers: wrongAnswersRef.current,
+      },
     });
   };
 
   const handleNextQuestion = () => {
-    clearInterval(timerRef.current);
+    stopTimer();
     if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex(i => i + 1);
+      const nextIdx = currentQuestionIndex + 1;
+      questionIdxRef.current = nextIdx;
+      isAnsweredRef.current  = false;
+      setCurrentQuestionIndex(nextIdx);
       setSelectedAnswer(null);
       setIsAnswered(false);
       setIsCorrect(false);
+      startTimer();
     } else {
       handleFinishLevel();
     }
@@ -193,7 +218,7 @@ export default function GamePage() {
       <div className="max-w-2xl mx-auto mb-4">
         <div className="flex items-center justify-between mb-2">
           <button
-            onClick={() => navigate('/map')}
+            onClick={() => { stopTimer(); navigate('/map'); }}
             className="text-white/60 hover:text-white text-sm transition"
           >
             ← Map
@@ -203,7 +228,7 @@ export default function GamePage() {
           </span>
         </div>
 
-        {/* Question progress bar */}
+        {/* Progress bar */}
         <div className="w-full bg-gray-700 rounded-full h-3 mb-3">
           <div
             className="bg-game-green h-3 rounded-full transition-all duration-500"
@@ -219,9 +244,7 @@ export default function GamePage() {
       <div className="max-w-2xl mx-auto mb-4">
         <div className="flex items-center justify-between mb-1">
           <span className="text-white/60 text-sm">⏱ Time</span>
-          <span className={`font-bold text-lg ${timerTextColor}`}>
-            {timeLeft}s
-          </span>
+          <span className={`font-bold text-lg ${timerTextColor}`}>{timeLeft}s</span>
         </div>
         <div className="w-full bg-gray-700 rounded-full h-2">
           <div
@@ -237,7 +260,6 @@ export default function GamePage() {
           {currentQuestion.question}
         </h2>
 
-        {/* Options */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           {currentQuestion.options.map((option, idx) => {
             let cls = 'bg-gray-100 text-gray-800 hover:bg-gray-200';
@@ -267,7 +289,6 @@ export default function GamePage() {
           })}
         </div>
 
-        {/* Feedback */}
         {isAnswered && (
           <div className={`p-4 rounded-xl text-center mb-4 ${
             isCorrect ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'
@@ -286,7 +307,6 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Action button */}
         <div className="text-center">
           {!isAnswered ? (
             <button
