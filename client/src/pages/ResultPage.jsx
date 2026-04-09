@@ -1,0 +1,166 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { getAllLevels } from '../services/api';
+
+// ── Stars helper ──────────────────────────────────────────────
+function StarDisplay({ stars }) {
+  return (
+    <div className="flex justify-center gap-3 my-4">
+      {[1, 2, 3].map(i => (
+        <span
+          key={i}
+          className={`text-6xl transition-all duration-500 ${
+            i <= stars ? 'opacity-100 drop-shadow-lg' : 'opacity-20 grayscale'
+          }`}
+          style={{
+            filter: i <= stars ? 'drop-shadow(0 0 8px #FFD700)' : undefined,
+            transform: i <= stars ? 'scale(1.1)' : 'scale(0.9)',
+          }}
+        >
+          ⭐
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── Message based on score ────────────────────────────────────
+function getMessage(stars) {
+  if (stars === 3) return { emoji: '🏆', text: 'PERFECT! You are a Math Master!' };
+  if (stars === 2) return { emoji: '🎉', text: 'Great job! Almost perfect!' };
+  if (stars === 1) return { emoji: '👍', text: 'Good effort! Keep practicing!' };
+  return { emoji: '💪', text: "Don't give up! Try again!" };
+}
+
+export default function ResultPage() {
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const state     = location.state;
+
+  const [nextLevelId, setNextLevelId] = useState(null);
+  const [loadingNext, setLoadingNext] = useState(true);
+
+  // Data passed from GamePage
+  const levelId       = state?.levelId       ?? null;
+  const score         = state?.score         ?? 0;
+  const stars         = state?.stars         ?? 0;
+  const correctCount  = state?.correctCount  ?? 0;
+  const totalQuestions= state?.totalQuestions?? 0;
+  const passed        = stars >= 1;
+
+  const { emoji, text } = getMessage(stars);
+
+  // ── Find the next level ───────────────────────────────────
+  useEffect(() => {
+    const findNext = async () => {
+      if (!levelId) { setLoadingNext(false); return; }
+      try {
+        const res    = await getAllLevels();
+        const levels = res.data;
+        const idx    = levels.findIndex(l => l._id === levelId);
+        if (idx !== -1 && idx + 1 < levels.length) {
+          setNextLevelId(levels[idx + 1]._id);
+        }
+      } catch (err) {
+        console.error('Could not load levels:', err);
+      } finally {
+        setLoadingNext(false);
+      }
+    };
+    findNext();
+  }, [levelId]);
+
+  // If someone lands here directly with no state, send to map
+  if (!state) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <p className="text-white text-xl">No result data found.</p>
+        <button onClick={() => navigate('/map')} className="btn-primary px-6 py-3">
+          ← Go to Map
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-game-purple to-game-dark flex flex-col items-center justify-center px-4 py-12">
+
+      {/* ── Emoji + Title ── */}
+      <div className="text-8xl mb-2 animate-bounce">{emoji}</div>
+      <h1 className="text-4xl font-bold text-game-yellow text-center mb-1">
+        Level Complete!
+      </h1>
+      <p className="text-white/70 text-lg text-center mb-4">{text}</p>
+
+      {/* ── Stars ── */}
+      <StarDisplay stars={stars} />
+
+      {/* ── Score card ── */}
+      <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6 w-full max-w-sm mb-6 text-center">
+        <div className="text-6xl font-black text-game-yellow mb-1">
+          {score}%
+        </div>
+        <p className="text-white/60 text-sm mb-4">
+          {correctCount} out of {totalQuestions} correct
+        </p>
+
+        {/* Score bar */}
+        <div className="w-full bg-white/20 rounded-full h-3 mb-3">
+          <div
+            className={`h-3 rounded-full transition-all duration-700 ${
+              score >= 80 ? 'bg-green-400' :
+              score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+            }`}
+            style={{ width: `${score}%` }}
+          />
+        </div>
+
+        {/* Pass / Fail label */}
+        <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
+          passed
+            ? 'bg-green-500/30 text-green-300 border border-green-500/50'
+            : 'bg-red-500/30 text-red-300 border border-red-500/50'
+        }`}>
+          {passed ? '✅ Passed' : '❌ Not passed yet (need 60%)'}
+        </span>
+      </div>
+
+      {/* ── Action buttons ── */}
+      <div className="flex flex-col gap-3 w-full max-w-sm">
+
+        {/* Next Level — only shown if passed and next level exists */}
+        {passed && !loadingNext && nextLevelId && (
+          <button
+            onClick={() => navigate(`/game/${nextLevelId}`)}
+            className="w-full py-4 rounded-2xl font-bold text-xl text-white
+              bg-gradient-to-r from-green-500 to-emerald-500
+              hover:from-green-600 hover:to-emerald-600
+              transform hover:scale-105 transition-all shadow-lg shadow-green-500/30"
+          >
+            Next Level ▶
+          </button>
+        )}
+
+        {/* Try again */}
+        {levelId && (
+          <button
+            onClick={() => navigate(`/game/${levelId}`)}
+            className="w-full py-3 rounded-2xl font-bold text-lg text-white
+              bg-white/10 hover:bg-white/20 border border-white/20 transition"
+          >
+            🔄 Play Again
+          </button>
+        )}
+
+        {/* Back to map */}
+        <button
+          onClick={() => navigate('/map')}
+          className="w-full py-3 rounded-2xl font-bold text-lg text-white/70
+            hover:text-white transition text-center"
+        >
+          🗺️ Back to Map
+        </button>
+      </div>
+    </div>
+  );
+}
