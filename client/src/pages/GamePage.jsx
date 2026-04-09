@@ -5,6 +5,7 @@ import { useTranslation } from '../hooks/useTranslation';
 
 const TIMER_SECONDS = 30;
 const MAX_HINTS     = 2;
+const MAX_LIVES     = 3;
 
 export default function GamePage() {
   const { levelId }  = useParams();
@@ -31,6 +32,11 @@ export default function GamePage() {
   const [hintsLeft,      setHintsLeft]      = useState(MAX_HINTS);
   const [eliminatedOpts, setEliminatedOpts] = useState([]);
 
+  // ── Lives (test mode only) ──
+  const [lives,     setLives]     = useState(MAX_LIVES);
+  const [gameOver,  setGameOver]  = useState(false);
+  const livesRef = useRef(MAX_LIVES);
+
   // Refs to avoid stale closures
   const timerRef        = useRef(null);
   const isAnsweredRef   = useRef(false);
@@ -47,8 +53,19 @@ export default function GamePage() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
+  // ── Lose a life ──
+  const loseLife = () => {
+    if (isPractice) return;
+    livesRef.current = livesRef.current - 1;
+    setLives(livesRef.current);
+    if (livesRef.current <= 0) {
+      stopTimer();
+      setGameOver(true);
+    }
+  };
+
   const startTimer = useCallback(() => {
-    if (isPractice) return; // no timer in practice mode
+    if (isPractice) return;
     stopTimer();
     setTimeLeft(TIMER_SECONDS);
 
@@ -70,6 +87,10 @@ export default function GamePage() {
             isAnsweredRef.current = true;
             setIsAnswered(true);
             setIsCorrect(false);
+            // Lose a life when time runs out
+            livesRef.current = livesRef.current - 1;
+            setLives(livesRef.current);
+            if (livesRef.current <= 0) setGameOver(true);
           }
           return 0;
         }
@@ -123,6 +144,35 @@ export default function GamePage() {
     );
   }
 
+  if (gameOver) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-game-purple to-game-dark flex flex-col items-center justify-center px-4">
+        <div className="text-8xl mb-4 animate-bounce">💀</div>
+        <h1 className="text-4xl font-black text-red-400 mb-2">Game Over!</h1>
+        <p className="text-white/60 mb-2">You ran out of lives</p>
+        <p className="text-white/60 mb-8">
+          You answered <strong className="text-white">{correctCount}</strong> out of <strong className="text-white">{currentQuestionIndex + 1}</strong> correctly
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-sm">
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-4 rounded-2xl font-bold text-xl text-white
+              bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90 transition"
+          >
+            🔄 Try Again
+          </button>
+          <button
+            onClick={() => navigate('/map')}
+            className="w-full py-3 rounded-2xl font-bold text-white/70
+              hover:text-white border border-white/20 transition text-center"
+          >
+            🗺️ Back to Map
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions  = questions.length;
   const progressPct     = ((currentQuestionIndex + 1) / totalQuestions) * 100;
@@ -154,6 +204,7 @@ export default function GamePage() {
         };
         wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
         setWrongAnswers([...wrongAnswersRef.current]);
+        loseLife();
       }
     } catch (err) {
       const correct = selectedAnswer === currentQuestion.correctAnswer;
@@ -169,6 +220,7 @@ export default function GamePage() {
         };
         wrongAnswersRef.current = [...wrongAnswersRef.current, entry];
         setWrongAnswers([...wrongAnswersRef.current]);
+        loseLife();
       }
     } finally {
       setSubmitting(false);
@@ -228,9 +280,21 @@ export default function GamePage() {
             {isPractice ? '📖 Practice Mode' : '⏱ Test Mode'}
           </span>
 
-          <span className="text-game-yellow font-bold text-lg">
-            {toNepaliDigit(correctCount)} / {toNepaliDigit(currentQuestionIndex + (isAnswered ? 1 : 0))} ✓
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Lives — test mode only */}
+            {!isPractice && (
+              <div className="flex gap-1">
+                {[1,2,3].map(i => (
+                  <span key={i} className={`text-xl ${i <= lives ? 'opacity-100' : 'opacity-20 grayscale'}`}>
+                    ❤️
+                  </span>
+                ))}
+              </div>
+            )}
+            <span className="text-game-yellow font-bold text-lg">
+              {toNepaliDigit(correctCount)} / {toNepaliDigit(currentQuestionIndex + (isAnswered ? 1 : 0))} ✓
+            </span>
+          </div>
         </div>
 
         {/* Progress bar */}

@@ -207,6 +207,28 @@ export default function MapPage() {
         </div>
       </div>
 
+      {/* ── Daily Challenge card ── */}
+      {!isAdmin && (
+        <div className="max-w-2xl mx-auto mb-6">
+          <button
+            onClick={() => navigate('/daily-challenge')}
+            className="w-full bg-gradient-to-r from-yellow-400 to-orange-500
+              hover:from-yellow-500 hover:to-orange-600
+              rounded-2xl p-5 flex items-center justify-between shadow-xl
+              transform hover:scale-105 transition-all"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-4xl">🎯</span>
+              <div className="text-left">
+                <p className="text-white font-black text-lg">Daily Challenge</p>
+                <p className="text-white/80 text-sm">One new challenge every day!</p>
+              </div>
+            </div>
+            <span className="text-white font-black text-2xl">→</span>
+          </button>
+        </div>
+      )}
+
       {/* Map */}
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-6">

@@ -8,7 +8,8 @@ import ResultPage         from './pages/ResultPage.jsx'
 import LeaderboardPage    from './pages/LeaderboardPage.jsx'
 import ProfilePage        from './pages/ProfilePage.jsx'
 import AdminPage          from './pages/AdminPage.jsx'
-import AdminQuestionsPage from './pages/AdminQuestionsPage.jsx'
+import AdminQuestionsPage  from './pages/AdminQuestionsPage.jsx'
+import DailyChallengePage  from './pages/DailyChallengePage.jsx'
 
 import { GameProvider } from './context/GameContext.jsx'
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/profile"       element={<ProfilePage />} />
           <Route path="/admin"                    element={<AdminPage />} />
           <Route path="/admin/questions/:levelId" element={<AdminQuestionsPage />} />
+          <Route path="/daily-challenge"          element={<DailyChallengePage />} />
           <Route path="*"              element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>

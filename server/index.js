@@ -3,11 +3,12 @@ import cors     from 'cors'
 import dotenv   from 'dotenv'
 import connectDB from './config/db.js'
 
-import authRoutes     from './routes/authRoutes.js'
-import levelRoutes    from './routes/levelRoutes.js'
-import progressRoutes from './routes/progressRoutes.js'
-import questionRoutes from './routes/questionRoutes.js'
-import studentRoutes  from './routes/studentRoutes.js'
+import authRoutes            from './routes/authRoutes.js'
+import levelRoutes           from './routes/levelRoutes.js'
+import progressRoutes        from './routes/progressRoutes.js'
+import questionRoutes        from './routes/questionRoutes.js'
+import studentRoutes         from './routes/studentRoutes.js'
+import dailyChallengeRoutes  from './routes/dailyChallengeRoutes.js'
 
 dotenv.config()
 connectDB()
@@ -29,11 +30,12 @@ app.get('/api/health', (req, res) => {
   })
 })
 
-app.use('/api/auth',      authRoutes)
-app.use('/api/levels',    levelRoutes)
-app.use('/api/progress',  progressRoutes)
-app.use('/api/questions', questionRoutes)
-app.use('/api/students',  studentRoutes)
+app.use('/api/auth',            authRoutes)
+app.use('/api/levels',         levelRoutes)
+app.use('/api/progress',       progressRoutes)
+app.use('/api/questions',      questionRoutes)
+app.use('/api/students',       studentRoutes)
+app.use('/api/daily-challenge', dailyChallengeRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found.` })

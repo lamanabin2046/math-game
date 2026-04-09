@@ -34,4 +34,8 @@ export const deleteQuestion    = (id)        => API.delete(`/questions/admin/${i
 export const getLeaderboard = () => API.get('/students/leaderboard')
 export const getProfile     = () => API.get('/students/profile')
 
+// ── Daily Challenge ──
+export const getDailyChallenge     = ()     => API.get('/daily-challenge')
+export const submitDailyChallenge  = (data) => API.post('/daily-challenge/submit', data)
+
 export default API
