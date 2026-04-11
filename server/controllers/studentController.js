@@ -24,7 +24,7 @@ export async function getLeaderboard(req, res) {
   try {
     // Get top 20 students by totalPoints
     const students = await Student.find({ role: 'student' })
-      .select('name username totalPoints')
+      .select('name username totalPoints avatar')
       .sort({ totalPoints: -1 })
       .limit(20)
 
