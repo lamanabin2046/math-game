@@ -15,8 +15,8 @@ console.log('🧹 Cleared existing Grade 8 data\n')
 
 // Get next available level number (continues from grade 6)
 const maxLevel = await Level.findOne().sort({ levelNumber: -1 })
-let currentLevelNumber = (maxLevel?.levelNumber || 0) + 1
-console.log(`📌 Starting levelNumber from: ${currentLevelNumber}\n`)
+let levelNumber = (maxLevel?.levelNumber || 0) + 1
+console.log(`📌 Starting levelNumber from: ${levelNumber}\n`)
 
 const grade8 = [
   // ── 8A: Square roots — perfect squares (वर्गमूल) ─────────────────────────
@@ -483,36 +483,44 @@ const grade8 = [
 let totalQ = 0
 
 for (const levelData of grade8) {
-  let level = await Level.findOne({ sheet: levelData.sheet })
+  const firstHalf  = levelData.questions.slice(0, 10)
+  const secondHalf = levelData.questions.slice(10, 20)
 
-  if (!level) {
-    level = await Level.create({
-      levelNumber: currentLevelNumber++,
-      title: levelData.topic,
-      grade: levelData.grade,
-      sheet: levelData.sheet,
-      topic: levelData.topic,
-      passingScore: 12,
-      questionConfig: { totalQuestions: 20 },
-    })
-    console.log(`  Created level: ${levelData.sheet} — ${levelData.topic}`)
-  }
-
-  await Question.deleteMany({ levelId: level._id })
-
-  const toInsert = levelData.questions.map(q => ({
-    levelId: level._id,
-    topic: levelData.topic,
-    difficulty: levelData.grade,
-    question: q.question,
-    options: q.options.map(String),
-    correctAnswer: String(q.correctAnswer),
+  const level1 = await Level.create({
+    levelNumber:    levelNumber++,
+    title:          `${levelData.topic} (Part 1)`,
+    grade:          levelData.grade,
+    sheet:          `${levelData.sheet}-1`,
+    topic:          levelData.topic,
+    passingScore:   6,
+    questionConfig: { totalQuestions: 10 },
+  })
+  await Question.insertMany(firstHalf.map(q => ({
+    levelId: level1._id, topic: levelData.topic,
+    difficulty: levelData.grade, question: q.question,
+    options: q.options.map(String), correctAnswer: String(q.correctAnswer),
     explanation: q.explanation || '',
-  }))
+  })))
+  totalQ += firstHalf.length
+  console.log(`  ✅ ${levelData.sheet}-1: ${firstHalf.length} questions`)
 
-  await Question.insertMany(toInsert)
-  totalQ += toInsert.length
-  console.log(`  ✅ ${levelData.sheet}: ${toInsert.length} questions added`)
+  const level2 = await Level.create({
+    levelNumber:    levelNumber++,
+    title:          `${levelData.topic} (Part 2)`,
+    grade:          levelData.grade,
+    sheet:          `${levelData.sheet}-2`,
+    topic:          levelData.topic,
+    passingScore:   6,
+    questionConfig: { totalQuestions: 10 },
+  })
+  await Question.insertMany(secondHalf.map(q => ({
+    levelId: level2._id, topic: levelData.topic,
+    difficulty: levelData.grade, question: q.question,
+    options: q.options.map(String), correctAnswer: String(q.correctAnswer),
+    explanation: q.explanation || '',
+  })))
+  totalQ += secondHalf.length
+  console.log(`  ✅ ${levelData.sheet}-2: ${secondHalf.length} questions`)
 }
 
 console.log(`\n🎉 Done! Total questions added: ${totalQ}`)

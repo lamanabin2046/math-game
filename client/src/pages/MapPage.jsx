@@ -88,25 +88,33 @@ export default function MapPage() {
     if (s) setStreak(Number(s));
   }, []);
 
+  const load = async () => {
+    try {
+      const [levelsRes, progressRes] = await Promise.all([getAllLevels(), getProgress()]);
+      setLevels(levelsRes.data);
+      const progressMap = {};
+      (progressRes.data.data ?? []).forEach(p => {
+        if (!p.level) return; // skip broken progress records
+        progressMap[p.level._id ?? p.level] = {
+          stars: p.stars, score: p.score, completed: p.completed,
+        };
+      });
+      setProgress(progressMap);
+    } catch (err) {
+      console.error('Error loading map:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load on mount
+  useEffect(() => { load(); }, []);
+
+  // Reload every time user comes back to this page
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [levelsRes, progressRes] = await Promise.all([getAllLevels(), getProgress()]);
-        setLevels(levelsRes.data);
-        const progressMap = {};
-        (progressRes.data.data ?? []).forEach(p => {
-          progressMap[p.level._id ?? p.level] = {
-            stars: p.stars, score: p.score, completed: p.completed,
-          };
-        });
-        setProgress(progressMap);
-      } catch (err) {
-        console.error('Error loading map:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    const handleFocus = () => load();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   if (loading) {
