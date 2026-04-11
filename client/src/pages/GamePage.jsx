@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getQuestionsByLevel, checkAnswer, saveProgress } from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
+import { playCorrect, playWrong, playTick, playLevelComplete, playGameOver, playTimeUp, playClick } from '../utils/sounds';
 
 const TIMER_SECONDS = 30;
 const MAX_HINTS     = 2;
@@ -13,7 +14,6 @@ export default function GamePage() {
   const location     = useLocation();
   const { t, toNepaliDigit } = useTranslation();
 
-  // ── Mode: 'practice' or 'test' (default: test) ──
   const mode        = location.state?.mode ?? 'test';
   const isPractice  = mode === 'practice';
 
@@ -27,17 +27,12 @@ export default function GamePage() {
   const [submitting,           setSubmitting]           = useState(false);
   const [wrongAnswers,         setWrongAnswers]         = useState([]);
   const [timeLeft,             setTimeLeft]             = useState(TIMER_SECONDS);
-
-  // ── Hints ──
-  const [hintsLeft,      setHintsLeft]      = useState(MAX_HINTS);
-  const [eliminatedOpts, setEliminatedOpts] = useState([]);
-
-  // ── Lives (test mode only) ──
-  const [lives,     setLives]     = useState(MAX_LIVES);
-  const [gameOver,  setGameOver]  = useState(false);
+  const [hintsLeft,            setHintsLeft]            = useState(MAX_HINTS);
+  const [eliminatedOpts,       setEliminatedOpts]       = useState([]);
+  const [lives,                setLives]                = useState(MAX_LIVES);
+  const [gameOver,             setGameOver]             = useState(false);
   const livesRef = useRef(MAX_LIVES);
 
-  // Refs to avoid stale closures
   const timerRef        = useRef(null);
   const isAnsweredRef   = useRef(false);
   const questionsRef    = useRef([]);
@@ -61,6 +56,7 @@ export default function GamePage() {
     if (livesRef.current <= 0) {
       stopTimer();
       setGameOver(true);
+      playGameOver();
     }
   };
 
@@ -87,10 +83,13 @@ export default function GamePage() {
             isAnsweredRef.current = true;
             setIsAnswered(true);
             setIsCorrect(false);
-            // Lose a life when time runs out
+            playTimeUp();
             livesRef.current = livesRef.current - 1;
             setLives(livesRef.current);
-            if (livesRef.current <= 0) setGameOver(true);
+            if (livesRef.current <= 0) {
+              setGameOver(true);
+              playGameOver();
+            }
           }
           return 0;
         }
@@ -100,6 +99,13 @@ export default function GamePage() {
   }, [isPractice]);
 
   useEffect(() => () => stopTimer(), []);
+
+  // ── Tick sound for last 10 seconds ──
+  useEffect(() => {
+    if (!isPractice && timeLeft <= 10 && timeLeft > 0 && !isAnswered) {
+      playTick();
+    }
+  }, [timeLeft]);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -120,11 +126,12 @@ export default function GamePage() {
   // ── Hint handler ──
   const handleHint = () => {
     if (hintsLeft <= 0 || isAnswered || !isPractice) return;
-    const q       = questions[currentQuestionIndex];
-    const wrong   = q.options.filter(o => String(o) !== String(q.correctAnswer) && !eliminatedOpts.includes(o));
-    const toElim  = wrong.sort(() => Math.random() - 0.5).slice(0, 2);
+    const q      = questions[currentQuestionIndex];
+    const wrong  = q.options.filter(o => String(o) !== String(q.correctAnswer) && !eliminatedOpts.includes(o));
+    const toElim = wrong.sort(() => Math.random() - 0.5).slice(0, 2);
     setEliminatedOpts(prev => [...prev, ...toElim]);
     setHintsLeft(prev => prev - 1);
+    playClick();
   };
 
   if (loading) {
@@ -156,15 +163,13 @@ export default function GamePage() {
         <div className="flex flex-col gap-3 w-full max-w-sm">
           <button
             onClick={() => window.location.reload()}
-            className="w-full py-4 rounded-2xl font-bold text-xl text-white
-              bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90 transition"
+            className="w-full py-4 rounded-2xl font-bold text-xl text-white bg-gradient-to-r from-yellow-500 to-orange-500 hover:opacity-90 transition"
           >
             🔄 Try Again
           </button>
           <button
             onClick={() => navigate('/map')}
-            className="w-full py-3 rounded-2xl font-bold text-white/70
-              hover:text-white border border-white/20 transition text-center"
+            className="w-full py-3 rounded-2xl font-bold text-white/70 hover:text-white border border-white/20 transition text-center"
           >
             🗺️ Back to Map
           </button>
@@ -181,7 +186,10 @@ export default function GamePage() {
   const timerTextColor  = timeLeft > 20 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400';
 
   const handleSelectAnswer = (option) => {
-    if (!isAnswered && !eliminatedOpts.includes(option)) setSelectedAnswer(option);
+    if (!isAnswered && !eliminatedOpts.includes(option)) {
+      setSelectedAnswer(option);
+      playClick();
+    }
   };
 
   const handleSubmitAnswer = async () => {
@@ -196,7 +204,9 @@ export default function GamePage() {
       setIsAnswered(true);
       if (correct) {
         setCorrectCount(prev => prev + 1);
+        playCorrect();
       } else {
+        playWrong();
         const entry = {
           question: currentQuestion.question, options: currentQuestion.options,
           yourAnswer: selectedAnswer,
@@ -212,7 +222,9 @@ export default function GamePage() {
       setIsAnswered(true);
       if (correct) {
         setCorrectCount(prev => prev + 1);
+        playCorrect();
       } else {
+        playWrong();
         const entry = {
           question: currentQuestion.question, options: currentQuestion.options,
           yourAnswer: selectedAnswer,
@@ -229,6 +241,7 @@ export default function GamePage() {
 
   const handleFinishLevel = async () => {
     stopTimer();
+    playLevelComplete();
     const score = Math.round((correctCount / totalQuestions) * 100);
     const stars = score === 100 ? 3 : score >= 80 ? 2 : score >= 60 ? 1 : 0;
     let newBadges = [];
@@ -243,6 +256,7 @@ export default function GamePage() {
 
   const handleNextQuestion = () => {
     stopTimer();
+    playClick();
     if (currentQuestionIndex < totalQuestions - 1) {
       const nextIdx = currentQuestionIndex + 1;
       questionIdxRef.current = nextIdx;
@@ -271,7 +285,6 @@ export default function GamePage() {
             ← Map
           </button>
 
-          {/* Mode badge */}
           <span className={`text-xs font-bold px-3 py-1 rounded-full ${
             isPractice
               ? 'bg-green-500/30 text-green-300 border border-green-500/40'
@@ -281,7 +294,6 @@ export default function GamePage() {
           </span>
 
           <div className="flex items-center gap-2">
-            {/* Lives — test mode only */}
             {!isPractice && (
               <div className="flex gap-1">
                 {[1,2,3].map(i => (
@@ -297,7 +309,6 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* Progress bar */}
         <div className="w-full bg-gray-700 rounded-full h-3 mb-3">
           <div
             className="bg-game-green h-3 rounded-full transition-all duration-500"
@@ -349,7 +360,6 @@ export default function GamePage() {
           {currentQuestion.question}
         </h2>
 
-        {/* Options */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           {currentQuestion.options.map((option, idx) => {
             const isEliminated = eliminatedOpts.includes(option);
@@ -383,7 +393,6 @@ export default function GamePage() {
           })}
         </div>
 
-        {/* Feedback */}
         {isAnswered && (
           <div className={`p-4 rounded-xl text-center mb-4 ${
             isCorrect ? 'bg-green-100 border border-green-300' : 'bg-red-100 border border-red-300'
@@ -396,7 +405,6 @@ export default function GamePage() {
                 {t('game.correctAnswer')} <strong>{currentQuestion.correctAnswer}</strong>
               </p>
             )}
-            {/* Show explanation immediately in practice, at end in test */}
             {isPractice && currentQuestion.explanation && (
               <p className="text-gray-600 mt-2 text-sm italic bg-yellow-50 border border-yellow-200 rounded-lg p-2">
                 💡 {currentQuestion.explanation}
@@ -405,7 +413,6 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Action button */}
         <div className="text-center">
           {!isAnswered ? (
             <button

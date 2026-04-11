@@ -2,7 +2,24 @@ import Student  from '../models/Student.js'
 import Progress from '../models/Progress.js'
 import Level    from '../models/Level.js'
 
-// ── GET /api/students/leaderboard ──
+// ── PUT /api/students/avatar ──
+export async function updateAvatar(req, res) {
+  try {
+    const { avatar } = req.body
+    if (!avatar) return res.status(400).json({ message: 'Avatar is required.' })
+
+    const student = await Student.findByIdAndUpdate(
+      req.studentId,
+      { avatar },
+      { new: true }
+    ).select('-password')
+
+    res.json({ success: true, avatar: student.avatar })
+  } catch (err) {
+    console.error('Update avatar error:', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+}
 export async function getLeaderboard(req, res) {
   try {
     // Get top 20 students by totalPoints
@@ -23,6 +40,7 @@ export async function getLeaderboard(req, res) {
           name:            s.name,
           username:        s.username,
           totalPoints:     s.totalPoints,
+          avatar:          s.avatar ?? '🐯',
           levelsCompleted,
         }
       })
@@ -89,6 +107,7 @@ export async function getProfile(req, res) {
         name:            student.name,
         username:        student.username,
         totalPoints:     student.totalPoints,
+        avatar:          student.avatar ?? '🐯',
         currentStreak:   student.currentStreak ?? 0,
         longestStreak:   student.longestStreak ?? 0,
         badges:          student.badges ?? [],

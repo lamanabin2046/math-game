@@ -73,8 +73,8 @@ export default function LeaderboardPage() {
                   </div>
 
                   {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-game-purple border-2 border-white/30 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                    {s.name.charAt(0).toUpperCase()}
+                  <div style={{ fontSize: 28 }}>
+                    {s._id === myId ? (localStorage.getItem('avatar') ?? s.avatar ?? '🐯') : (s.avatar ?? '🐯')}
                   </div>
 
                   {/* Name + levels */}

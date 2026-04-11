@@ -33,6 +33,7 @@ export const deleteQuestion    = (id)        => API.delete(`/questions/admin/${i
 // ── Students ──
 export const getLeaderboard = () => API.get('/students/leaderboard')
 export const getProfile     = () => API.get('/students/profile')
+export const updateAvatar   = (avatar) => API.put('/students/avatar', { avatar })
 
 // ── Daily Challenge ──
 export const getDailyChallenge     = ()     => API.get('/daily-challenge')
